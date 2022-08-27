@@ -74,7 +74,8 @@ function this.cleanInactiveFog()
 
 	for _, node in pairs(vfxRoot.children) do
 		if node and string.startswith(node.name, "tew_") then
-			if node.appCulled then
+			local emitter = node:getObjectByName("Mist Emitter")
+			if emitter and emitter.appCulled then
 				vfxRoot:detachChild(node)
 				this.debugLog("Found appculled fog. Detaching.")
 				for _, fogType in pairs(currentFogs) do
