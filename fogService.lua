@@ -46,14 +46,10 @@ end
 -- Returns true if the cell is fogged --
 function this.isCellFogged(activeCell, fogType)
 	if not currentFogs or not currentFogs[fogType] then return false end
-	for _, cell in pairs(currentFogs[fogType]) do
-		if cell == activeCell then
-			this.debugLog("Cell: " .. cell.editorName .. " is fogged.")
-			return true
-		end
-	end
-	return false
+	return table.find(currentFogs[fogType], activeCell) ~= nil
 end
+
+
 
 -- Remove fog meshes one by one --
 local function removeSelected(fog)
@@ -78,44 +74,43 @@ function this.cleanInactiveFog()
 			if emitter and emitter.appCulled then
 				vfxRoot:detachChild(node)
 				this.debugLog("Found appculled fog. Detaching.")
-				for _, fogType in pairs(currentFogs) do
-					for f, _ in pairs(fogType) do
-						if node == f then
-							fogType[f] = nil
-							this.debugLog("Removed fog: " .. f.name)
-						end
+
+				for fogType, fogList in pairs(currentFogs) do
+					if fogList[node] then
+						fogList[node] = nil
+						this.debugLog("Removed fog: " .. node.name)
 					end
 				end
 			end
 		end
 	end
 
+
 	for _, fogType in pairs(currentFogs) do
-		if not fogType then return end
 		for fog, _ in pairs(fogType) do
-			if not fog then return end
-			local fogPosition = fog.translation:copy()
-			local playerPosition = mp.position:copy()
-			if playerPosition:distance(fogPosition) > data.fogDistance then
+			if fog and fog.appCulled then
+				vfxRoot:detachChild(fog)
+				this.debugLog("Found appculled fog. Detaching.")
+				fogType[fog] = nil
+				this.debugLog("Removed fog: " .. fog.name)
+			elseif fog and mp.position:distance(fog.translation) > data.fogDistance then
 				this.debugLog("Found distant fog. Appculling.")
 				removeSelected(fog)
 			end
 		end
 	end
+
 end
 
 -- Check whether fog is appculled --
 function this.isFogAppculled(fogType)
 	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
 	for _, node in pairs(vfxRoot.children) do
-		if node and node.name == "tew_" .. fogType then
-			for _, fog in pairs(node.children) do
-				if fog.name == "Mist Emitter" then
-					if fog.appCulled == true then
-						this.debugLog("Fog is appculled.")
-						return true
-					end
-				end
+		if node and string.startswith(node.name, "tew_" .. fogType) then
+			local emitter = node:getObjectByName("Mist Emitter")
+			if emitter and emitter.appCulled then
+				this.debugLog("Fog is appculled.")
+				return true
 			end
 		end
 	end
@@ -132,16 +127,18 @@ local function getFogPosition(activeCell, height)
 
 	if average == 0 or denom == 0 then
 		return height
-	else
-		if ((average / denom) + height) <= 0 then
-			return height
-		elseif ((average / denom) + height) > height then
-			return height + 100
-		end
 	end
 
-	return (average / denom) + height
+	local result = (average / denom) + height
+	if result <= 0 then
+		return height
+	elseif result > height then
+		return height + 100
+	end
+
+	return result
 end
+
 
 -- Determine fog position for interiors --
 local function getInteriorCellPosition(cell)
@@ -178,26 +175,33 @@ end
 
 -- Calculate output colours from current fog colour --
 function this.getOutputValues()
-	local weatherColour = WtC.currentFogColor:copy()
+	local currentFogColor = WtC.currentFogColor:copy()
+	local currentSkyColor = WtC.currentSkyColor:copy()
+	local weatherColour = {
+		r = math.lerp(currentFogColor.r, currentSkyColor.r, 0.1),
+		g = math.lerp(currentFogColor.g, currentSkyColor.g, 0.1),
+		b = math.lerp(currentFogColor.b, currentSkyColor.b, 0.1)
+	}
 	return {
 		colours = {
-			r = math.clamp(weatherColour.r + 0.03, 0.1, 0.85),
-			g = math.clamp(weatherColour.g + 0.03, 0.1, 0.85),
-			b = math.clamp(weatherColour.b + 0.03, 0.1, 0.85)
+			r = math.clamp(weatherColour.r - 0.03, 0.03, 0.72),
+			g = math.clamp(weatherColour.g - 0.02, 0.03, 0.72),
+			b = math.clamp(weatherColour.b - 0.03, 0.03, 0.72)
 		},
 		angle = WtC.windVelocityCurrWeather:normalized():copy().y * math.pi * 0.5,
 		speed = math.max(WtC.currentWeather.cloudsSpeed * config.speedCoefficient, data.minimumSpeed)
 	}
 end
 
--- These continues are giving me headaches, such an ugly job, tewl --
 function this.reColour()
+	if not currentFogs then return end
 	local output = this.getOutputValues()
 	local fogColour = output.colours
 	local speed = output.speed
 	local angle = output.angle
+
 	for _, fogType in pairs(currentFogs) do
-		if not fogType or not currentFogs then return end
+		if not fogType then return end
 		if fogType ~= currentFogs["interior"] then
 			for fog, _ in pairs(fogType) do
 				if fog and fogType ~= "interior" then
@@ -205,7 +209,6 @@ function this.reColour()
 					local controller = particleSystem.controller
 					local colorModifier = controller.particleModifiers
 
-					-- Only alter speed and angle for clouds, per current weather settings --
 					if fogType == currentFogs["cloud"] then
 						controller.speed = speed
 						controller.planarAngle = angle
@@ -227,7 +230,6 @@ function this.reColour()
 					particleSystem:updateProperties()
 					particleSystem:updateNodeEffects()
 					fog:update()
-					fog:update()
 					fog:updateProperties()
 					fog:updateNodeEffects()
 				end
@@ -236,9 +238,9 @@ function this.reColour()
 	end
 end
 
+
 -- Add fogs to the active cells
 function this.addFog(options)
-
 	local type = options.type
 	local height = options.height
 
@@ -247,43 +249,39 @@ function this.addFog(options)
 	this.debugLog("Checking if we can add fog: " .. type)
 
 	for _, activeCell in pairs(tes3.getActiveCells()) do
-		if (not (this.isCellFogged(activeCell, type)) and not (activeCell.isInterior)) then
+		if not this.isCellFogged(activeCell, type) and not activeCell.isInterior then
 			this.debugLog("Cell is not fogged. Adding " .. type .. ".")
 
 			local fogPosition = tes3vector3.new(
-				8192 * activeCell.gridX + 4096,
-				8192 * activeCell.gridY + 4096,
-				getFogPosition(activeCell, height)
-			)
+			8192 * activeCell.gridX + 4096,
+			8192 * activeCell.gridY + 4096,
+			getFogPosition(activeCell, height)
+		)
 
-			if (tes3.player.position:copy():distance(fogPosition:copy()) <= data.fogDistance) then
+		if tes3.player.position:copy():distance(fogPosition:copy()) <= data.fogDistance then
+			local fogMesh = this.meshes[type]:clone()
+			fogMesh:clearTransforms()
+			fogMesh.translation = fogPosition
 
-				local fogMesh = this.meshes[options.type]:clone()
-				fogMesh:clearTransforms()
-				-- Position just at the centre of the cell --
-				fogMesh.translation = fogPosition
+			vfxRoot:attachChild(fogMesh, true)
 
-				vfxRoot:attachChild(fogMesh, true)
-
-				for _, vfx in pairs(vfxRoot.children) do
-					if vfx then
-						if vfx.name == "tew_" .. options.type then
-							local particleSystem = vfx:getObjectByName("MistEffect")
-							local controller = particleSystem.controller
-							controller.initialSize = table.choice(data.fogTypes[options.type].initialSize)
-							this.updateCurrentFogs(options.type, vfx, activeCell)
-						end
-					end
+			for _, vfx in pairs(vfxRoot.children) do
+				if vfx and vfx.name == "tew_" .. type then
+					local particleSystem = vfx:getObjectByName("MistEffect")
+					local controller = particleSystem.controller
+					controller.initialSize = table.choice(data.fogTypes[type].initialSize)
+					this.updateCurrentFogs(type, vfx, activeCell)
 				end
-
-				fogMesh:update()
-				fogMesh:updateProperties()
-				fogMesh:updateNodeEffects()
 			end
+
+			fogMesh:update()
+			fogMesh:updateProperties()
+			fogMesh:updateNodeEffects()
 		end
 	end
-
 end
+end
+
 
 -- Removes fog from view by appculling - with fade out
 function this.removeFog(fogType)
@@ -305,7 +303,6 @@ end
 
 -- Add fog to interior, a wee bit different func here --
 function this.addInteriorFog(options)
-
 	this.debugLog("Adding interior fog.")
 
 	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
@@ -314,20 +311,18 @@ function this.addInteriorFog(options)
 	local height = options.height
 	local cell = options.cell
 
-	if not (this.isCellFogged(cell, fogType)) then
+	if not this.isCellFogged(cell, fogType) then
 		this.debugLog("Interior cell is not fogged. Adding " .. fogType .. ".")
 		local fogMesh = this.meshes["interior"]:clone()
 		local pos = getInteriorCellPosition(cell)
 
 		fogMesh:clearTransforms()
 		fogMesh.translation = tes3vector3.new(
-			pos.x,
-			pos.y,
-			pos.z + height
-		)
+		pos.x,
+		pos.y,
+		pos.z + height
+	)
 
-		-- Interior light/colour values don't change, so we're good to just set it once --
-		-- Let's give it a natural orangeish hue --
 		local originalInteriorFogColor = cell.fogColor
 		local interiorFogColor = {
 			r = math.clamp(math.lerp(originalInteriorFogColor.r, 1.0, 0.5), 0.3, 0.85),
@@ -360,6 +355,7 @@ function this.addInteriorFog(options)
 		fogMesh:updateNodeEffects()
 	end
 end
+
 
 -- Just remove them all --
 function this.removeAll()

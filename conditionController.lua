@@ -2,10 +2,10 @@
 
 -->>>---------------------------------------------------------------------------------------------<<<--
 
-local fogService = require("tew\\Vapourmist\\fogService")
+local fogService = require("tew.Vapourmist.fogService")
 local debugLog = fogService.debugLog
-local config = require("tew\\Vapourmist\\config")
-local data = require("tew\\Vapourmist\\data")
+local config = require("tew.Vapourmist.config")
+local data = require("tew.Vapourmist.data")
 
 local toFogColour, toWeather, toRegion, fromFogColour, fromWeather, fromRegion, recolourRegistered
 
@@ -16,15 +16,14 @@ local function interiorCheck(cell)
 	debugLog("Starting interior check.")
 
 	-- Only proceed if the cell is eligible for interior fog and is not already fogged --
-	if data.interiorFog.isAvailable(cell) and not fogService.isCellFogged(cell, data.interiorFog.name) then
-
-		local options = {
-			height = data.interiorFog.height,
-			cell = cell,
-		}
-
-		fogService.addInteriorFog(options)
+	if not data.interiorFog.isAvailable(cell) or fogService.isCellFogged(cell, data.interiorFog.name) then
+		return
 	end
+
+	fogService.addInteriorFog({
+		height = data.interiorFog.height,
+		cell = cell,
+	})
 end
 
 -- Controls conditions and fog spawning/removing --
@@ -83,8 +82,6 @@ local function conditionCheck()
 
 	-- Iterate through fog types --
 	for _, fogType in pairs(data.fogTypes) do
-
-		-- Log fog type --
 		debugLog("Fog type: " .. fogType.name)
 
 		-- Get type of fog and its pre-set height for later calcs --
@@ -125,15 +122,14 @@ local function conditionCheck()
 	fromRegion = toRegion
 end
 
--- Check if we can add post-rain fog --
 local function onWeatherChanged(e)
-	if data.fogTypes["mist"].wetWeathers[e.from.name] then
-
+	local fogType = data.fogTypes["mist"]
+	if fogType.wetWeathers[e.from.name] then
 		debugLog("Adding post-rain mist.")
 
 		local options = {
-			type = data.fogTypes["mist"].name,
-			height = data.fogTypes["mist"].height,
+			type = fogType.name,
+			height = fogType.height,
 		}
 
 		-- Slight offset so we get all data needed --

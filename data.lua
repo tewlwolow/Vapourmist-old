@@ -1,11 +1,11 @@
-local this = {}
+local data = {}
 
 local config = require("tew.Vapourmist.config")
 
-this.baseTimerDuration = 0.5
-this.minimumSpeed = 15
-this.minStaticCount = 5
-this.fogDistance = 12500
+data.baseTimerDuration = 0.5
+data.minimumSpeed = 15
+data.minStaticCount = 5
+data.fogDistance = 12500
 
 local interiorStatics = {
     "in_moldcave",
@@ -37,23 +37,15 @@ local interiorNames = {
 }
 
 
-this.fogTypes = {
+data.fogTypes = {
     ["cloud"] = {
         name = "cloud",
         mesh = "tew\\Vapourmist\\vapourcloud.nif",
         height = 5100,
         initialSize = { 650, 700, 780, 800, 900, 980, 1000, 1100 },
         isAvailable = function(_, weather)
-
-            if config.blockedCloud[weather.name] and config.blockedCloud[weather.name] ~= nil then
-                return false
-            end
-
-            if config.cloudyWeathers[weather.name] and config.cloudyWeathers[weather.name] ~= nil then
-                return true
-            end
-
-            return false
+            return not config.blockedCloud[weather.name]
+            and config.cloudyWeathers[weather.name]
         end
     },
     ["mist"] = {
@@ -63,37 +55,24 @@ this.fogTypes = {
         initialSize = { 400, 420, 450, 500, 520, 550 },
         wetWeathers = { ["Rain"] = true, ["Thunderstorm"] = true },
         isAvailable = function(gameHour, weather)
-
-            if config.blockedMist[weather.name] and config.blockedMist[weather.name] ~= nil then
-                return false
-            end
-
+            if config.blockedMist[weather.name] then return false end
             local WtC = tes3.worldController.weatherController
-            if (
-                (
-                    (gameHour > WtC.sunriseHour - 1 and gameHour < WtC.sunriseHour + 1.5)
-                        or (gameHour >= WtC.sunsetHour - 0.4 and gameHour < WtC.sunsetHour + 2))
-                    and not (this.fogTypes["mist"].wetWeathers[weather.name])
-                ) then
-                return true
-            end
+            return (
+            (gameHour > WtC.sunriseHour - 1 and gameHour < WtC.sunriseHour + 1.5)
+            or (gameHour >= WtC.sunsetHour - 0.4 and gameHour < WtC.sunsetHour + 2)
+        ) and not data.fogTypes["mist"].wetWeathers[weather.name]
+        or config.mistyWeathers[weather.name]
+    end
 
-            if config.mistyWeathers[weather.name] and config.mistyWeathers[weather.name] ~= nil then
-                return true
-            end
-
-            return false
-        end
-    },
+},
 }
 
-this.interiorFog = {
+data.interiorFog = {
     name = "interior",
     mesh = "tew\\Vapourmist\\vapourint.nif",
     height = -1300,
     initialSize = { 300, 400, 450, 500, 510, 550 },
     isAvailable = function(cell)
-
         for _, namePattern in ipairs(interiorNames) do
             if string.find(cell.name:lower(), namePattern) then
                 return true
@@ -105,18 +84,17 @@ this.interiorFog = {
             for _, statName in ipairs(interiorStatics) do
                 if string.startswith(stat.object.id:lower(), statName) then
                     count = count + 1
-                    if count >= this.minStaticCount then
+                    if count >= data.minStaticCount then
                         return true
                     end
                 end
             end
         end
 
-        if count == 0 then return false end
-
         return false
     end
+
 }
 
 
-return this
+return data
