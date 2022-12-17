@@ -51,7 +51,7 @@ data.fogTypes = {
     ["mist"] = {
         name = "mist",
         mesh = "tew\\Vapourmist\\vapourmist.nif",
-        height = 630,
+        height = 560,
         initialSize = { 860, 930, 1000, 1100, 1243, 1360, 1450 },
         wetWeathers = { ["Rain"] = true, ["Thunderstorm"] = true },
         isAvailable = function(gameHour, weather)
