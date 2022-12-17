@@ -42,7 +42,7 @@ data.fogTypes = {
         name = "cloud",
         mesh = "tew\\Vapourmist\\vapourcloud.nif",
         height = 5100,
-        initialSize = { 650, 700, 780, 800, 900, 980, 1000, 1100 },
+        initialSize = { 800, 900, 980, 1000, 1100, 1250, 1400, 1600 },
         isAvailable = function(_, weather)
             return not config.blockedCloud[weather.name]
             and config.cloudyWeathers[weather.name]
@@ -51,7 +51,7 @@ data.fogTypes = {
     ["mist"] = {
         name = "mist",
         mesh = "tew\\Vapourmist\\vapourmist.nif",
-        height = 550,
+        height = 620,
         initialSize = { 400, 420, 450, 500, 520, 550 },
         wetWeathers = { ["Rain"] = true, ["Thunderstorm"] = true },
         isAvailable = function(gameHour, weather)
