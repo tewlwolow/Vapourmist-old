@@ -173,20 +173,28 @@ function this.cullFog(bool, type)
 	end
 end
 
+local function getFogMix(fog, sky)
+	return math.lerp(fog, sky, 0.15)
+end
+
+local function getLerpedComp(comp)
+	return math.clamp(math.lerp(comp, 1.0, 0.12), 0.03, 0.88)
+end
+
 -- Calculate output colours from current fog colour --
 function this.getOutputValues()
 	local currentFogColor = WtC.currentFogColor:copy()
 	local currentSkyColor = WtC.currentSkyColor:copy()
 	local weatherColour = {
-		r = math.lerp(currentFogColor.r, currentSkyColor.r, 0.1),
-		g = math.lerp(currentFogColor.g, currentSkyColor.g, 0.1),
-		b = math.lerp(currentFogColor.b, currentSkyColor.b, 0.1)
+		r = getFogMix(currentFogColor.r, currentSkyColor.r),
+		g = getFogMix(currentFogColor.g, currentSkyColor.g),
+		b = getFogMix(currentFogColor.b, currentSkyColor.b)
 	}
 	return {
 		colours = {
-			r = math.clamp(math.lerp(weatherColour.r, 1.0, 0.1), 0.03, 0.88),
-			g = math.clamp(math.lerp(weatherColour.g, 1.0, 0.1), 0.03, 0.88),
-			b = math.clamp(math.lerp(weatherColour.b, 1.0, 0.1), 0.03, 0.88)
+			r = getLerpedComp(weatherColour.r),
+			g = getLerpedComp(weatherColour.g),
+			b = getLerpedComp(weatherColour.b)
 		},
 		angle = WtC.windVelocityCurrWeather:normalized():copy().y * math.pi * 0.5,
 		speed = math.max(WtC.currentWeather.cloudsSpeed * config.speedCoefficient, data.minimumSpeed)
