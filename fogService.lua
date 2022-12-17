@@ -49,8 +49,6 @@ function this.isCellFogged(activeCell, fogType)
 	return table.find(currentFogs[fogType], activeCell) ~= nil
 end
 
-
-
 -- Remove fog meshes one by one --
 local function removeSelected(fog)
 	local emitter = fog:getObjectByName("Mist Emitter")
