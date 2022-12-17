@@ -8,8 +8,7 @@ return mwse.loadConfig (
             ["Cloudy"] = true,
             ["Foggy"] = true,
             ["Rain"] = true,
-            ["Snow"] = true,
-            ["Thunderstorm"] = true,
+            ["Thunderstorm"] = true
         },
         mistyWeathers = {
             ["Foggy"] = true,
