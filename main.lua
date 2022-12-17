@@ -3,7 +3,7 @@
 
 -->>>---------------------------------------------------------------------------------------------<<<--
 
-local version = require("tew\\Vapourmist\\version")
+local version = require("tew.Vapourmist.version")
 local VERSION = version.version
 
 local function init()

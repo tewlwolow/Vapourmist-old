@@ -1,6 +1,6 @@
 local configPath = "Vapourmist"
 local config = require("tew.Vapourmist.config")
-local version = require("tew\\Vapourmist\\version")
+local version = require("tew.Vapourmist.version")
 local VERSION = version.version
 
 local function registerVariable(id)
