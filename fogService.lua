@@ -184,9 +184,9 @@ function this.getOutputValues()
 	}
 	return {
 		colours = {
-			r = math.clamp(weatherColour.r - 0.03, 0.03, 0.72),
-			g = math.clamp(weatherColour.g - 0.02, 0.03, 0.72),
-			b = math.clamp(weatherColour.b - 0.03, 0.03, 0.72)
+			r = math.clamp(math.lerp(weatherColour.r, 1.0, 0.1), 0.03, 0.88),
+			g = math.clamp(math.lerp(weatherColour.g, 1.0, 0.1), 0.03, 0.88),
+			b = math.clamp(math.lerp(weatherColour.b, 1.0, 0.1), 0.03, 0.88)
 		},
 		angle = WtC.windVelocityCurrWeather:normalized():copy().y * math.pi * 0.5,
 		speed = math.max(WtC.currentWeather.cloudsSpeed * config.speedCoefficient, data.minimumSpeed)
