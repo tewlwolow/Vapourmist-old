@@ -1,9 +1,9 @@
 local this = {}
 
-local config = require("tew\\Vapourmist\\config")
-local version = require("tew\\Vapourmist\\version")
+local config = require("tew.Vapourmist.config")
+local version = require("tew.Vapourmist.version")
 local VERSION = version.version
-local data = require("tew\\Vapourmist\\data")
+local data = require("tew.Vapourmist.data")
 
 local WtC = tes3.worldController.weatherController
 
@@ -178,7 +178,7 @@ local function getFogMix(fog, sky)
 end
 
 local function getLerpedComp(comp)
-	return math.clamp(math.lerp(comp, 1.0, 0.12), 0.03, 0.88)
+	return math.clamp(math.lerp(comp, 1.0, 0.06), 0.03, 0.88)
 end
 
 -- Calculate output colours from current fog colour --
