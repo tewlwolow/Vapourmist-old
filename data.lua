@@ -42,7 +42,7 @@ data.fogTypes = {
         name = "cloud",
         mesh = "tew\\Vapourmist\\vapourcloud.nif",
         height = 6000,
-        initialSize = {1000, 1200, 1500, 1600, 1740, 1917, 2100, 2450 },
+        initialSize = {1340, 1500, 1620, 1740, 1917, 2100, 2450, 2500, 2600 },
         isAvailable = function(_, weather)
             return not config.blockedCloud[weather.name]
             and config.cloudyWeathers[weather.name]
