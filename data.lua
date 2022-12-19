@@ -2,10 +2,10 @@ local data = {}
 
 local config = require("tew.Vapourmist.config")
 
-data.baseTimerDuration = 0.5
+data.baseTimerDuration = 0.3
 data.minimumSpeed = 15
 data.minStaticCount = 5
-data.fogDistance = 9200
+data.fogDistance = 8200
 
 local interiorStatics = {
     "in_moldcave",
@@ -41,8 +41,8 @@ data.fogTypes = {
     ["cloud"] = {
         name = "cloud",
         mesh = "tew\\Vapourmist\\vapourcloud.nif",
-        height = 5100,
-        initialSize = {1300, 1400, 1500, 1640, 1720, 1850, 1917 },
+        height = 6000,
+        initialSize = {1000, 1200, 1500, 1600, 1740, 1917, 2100, 2450 },
         isAvailable = function(_, weather)
             return not config.blockedCloud[weather.name]
             and config.cloudyWeathers[weather.name]
@@ -51,8 +51,8 @@ data.fogTypes = {
     ["mist"] = {
         name = "mist",
         mesh = "tew\\Vapourmist\\vapourmist.nif",
-        height = 560,
-        initialSize = { 860, 930, 1000, 1100, 1243, 1360, 1450 },
+        height = 650,
+        initialSize = { 700, 800, 1100, 1243, 1450, 1520},
         wetWeathers = { ["Rain"] = true, ["Thunderstorm"] = true },
         isAvailable = function(gameHour, weather)
             if config.blockedMist[weather.name] then return false end
