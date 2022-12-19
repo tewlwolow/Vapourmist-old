@@ -5,6 +5,9 @@ local version = require("tew.Vapourmist.version")
 local VERSION = version.version
 local data = require("tew.Vapourmist.data")
 
+local CELL_SIZE = 8192
+local DRAW_DISTANCE = mge.distantLandRenderConfig.drawDistance
+
 local WtC = tes3.worldController.weatherController
 
 -- The array holding cells and their fog data --
@@ -39,14 +42,30 @@ function this.purgeCurrentFogs(fogType)
 end
 
 -- Update cache --
-function this.updateCurrentFogs(fogType, fog, cell)
-	currentFogs[fogType][fog] = cell
+function this.updateCurrentFogs(fogType, fog, cellName)
+	currentFogs[fogType][fog] = cellName
 end
 
 -- Returns true if the cell is fogged --
-function this.isCellFogged(activeCell, fogType)
-	if not currentFogs or not currentFogs[fogType] then return false end
-	return table.find(currentFogs[fogType], activeCell) ~= nil
+function this.isCellFogged(cellName, fogType)
+	if table.empty(currentFogs) or table.empty(currentFogs[fogType]) then return false end
+	return table.find(currentFogs[fogType], cellName)
+end
+
+-- Appculling switch --
+function this.cullFog(bool, fogType)
+	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
+	for _, node in pairs(vfxRoot.children) do
+		if node and node.name == "tew_" .. fogType then
+			local emitter = node:getObjectByName("Mist Emitter")
+			if emitter.appCulled ~= bool then
+				emitter.appCulled = bool
+				emitter:update()
+				node:update()
+				this.debugLog("Appculling switched to " .. tostring(bool) .. " for " .. fogType .. " fog.")
+			end
+		end
+	end
 end
 
 -- Remove fog meshes one by one --
@@ -55,6 +74,7 @@ local function removeSelected(fog)
 	if not emitter.appCulled then
 		emitter.appCulled = true
 		emitter:update()
+		fog:update()
 		this.debugLog("Appculling fog: " .. fog.name)
 	end
 end
@@ -73,16 +93,17 @@ function this.cleanInactiveFog()
 				vfxRoot:detachChild(node)
 				this.debugLog("Found appculled fog. Detaching.")
 
-				for fogType, fogList in pairs(currentFogs) do
-					if fogList[node] then
-						fogList[node] = nil
-						this.debugLog("Removed fog: " .. node.name)
+				for _, fogList in pairs(currentFogs) do
+					for fog, _ in pairs(fogList) do
+						if node == fog then
+							fogList[fog] = nil
+							this.debugLog("Removed fog: " .. node.name)
+						end
 					end
 				end
 			end
 		end
 	end
-
 
 	for _, fogType in pairs(currentFogs) do
 		for fog, _ in pairs(fogType) do
@@ -153,24 +174,6 @@ local function getInteriorCellPosition(cell)
 	return { x = pos.x / denom, y = pos.y / denom, z = pos.z / denom }
 end
 
--- Appculling switch --
-function this.cullFog(bool, type)
-	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
-	for _, node in pairs(vfxRoot.children) do
-		if node and node.name == "tew_" .. type then
-			for _, fog in pairs(node.children) do
-				if fog.name == "Mist Emitter" then
-					if fog.appCulled ~= bool then
-						fog.appCulled = bool
-						fog:update()
-						this.debugLog("Appculling switched to " .. tostring(bool) .. " for " .. type .. " fogs.")
-					end
-				end
-			end
-		end
-	end
-end
-
 local function getFogMix(fog, sky)
 	return math.lerp(fog, sky, 0.15)
 end
@@ -211,81 +214,102 @@ function this.reColour()
 		if fogType ~= currentFogs["interior"] then
 			for fog, _ in pairs(fogType) do
 				if fog and fogType ~= "interior" then
-					local particleSystem = fog:getObjectByName("MistEffect")
-					local controller = particleSystem.controller
-					local colorModifier = controller.particleModifiers
+					local emitters = {
+						fog:getObjectByName("FogLayer1"),
+						fog:getObjectByName("FogLayer2"),
+						fog:getObjectByName("FogLayer3")
+					}
 
-					if fogType == currentFogs["cloud"] then
-						controller.speed = speed
-						controller.planarAngle = angle
+					for _, emitter in ipairs(emitters) do
+						if not emitter then goto continue end
+
+						local controller = emitter.controller
+						local colorModifier = controller.particleModifiers
+
+						if fogType == currentFogs["cloud"] then
+							controller.speed = speed
+							controller.planarAngle = angle
+							controller.emitterWidth = CELL_SIZE * DRAW_DISTANCE
+							controller.emitterHeight = CELL_SIZE * DRAW_DISTANCE
+							controller.emitterDepth = math.random(700, 2400)
+						end
+
+						for _, key in pairs(colorModifier.colorData.keys) do
+							key.color.r = fogColour.r
+							key.color.g = fogColour.g
+							key.color.b = fogColour.b
+						end
+
+						local materialProperty = emitter.materialProperty
+						materialProperty.emissive = fogColour
+						materialProperty.specular = fogColour
+						materialProperty.diffuse = fogColour
+						materialProperty.ambient = fogColour
+
+						emitter:update()
+						emitter:updateProperties()
+						emitter:updateNodeEffects()
+						fog:update()
+						fog:updateProperties()
+						fog:updateNodeEffects()
+
+						:: continue ::
 					end
-
-					for _, key in pairs(colorModifier.colorData.keys) do
-						key.color.r = fogColour.r
-						key.color.g = fogColour.g
-						key.color.b = fogColour.b
-					end
-
-					local materialProperty = particleSystem.materialProperty
-					materialProperty.emissive = fogColour
-					materialProperty.specular = fogColour
-					materialProperty.diffuse = fogColour
-					materialProperty.ambient = fogColour
-
-					particleSystem:update()
-					particleSystem:updateProperties()
-					particleSystem:updateNodeEffects()
-					fog:update()
-					fog:updateProperties()
-					fog:updateNodeEffects()
 				end
 			end
 		end
 	end
 end
 
+local function deployEmitter(vfx, particleSystem, cellName, fogType)
+	if not particleSystem then return end
+	local controller = particleSystem.controller
+	controller.birthRate = math.random(0.3, 1.5) * DRAW_DISTANCE
+	controller.useBirthRate = true
+	local sizeArray = data.fogTypes[fogType].initialSize
+	controller.initialSize = sizeArray[math.random(1, #sizeArray)]
+	this.updateCurrentFogs(fogType, vfx, cellName)
+end
 
 -- Add fogs to the active cells
 function this.addFog(options)
-	local type = options.type
+	local fogType = options.type
 	local height = options.height
 
 	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
 
-	this.debugLog("Checking if we can add fog: " .. type)
+	this.debugLog("Checking if we can add fog: " .. fogType)
 
-	for _, activeCell in pairs(tes3.getActiveCells()) do
-		if not this.isCellFogged(activeCell, type) and not activeCell.isInterior then
-			this.debugLog("Cell is not fogged. Adding " .. type .. ".")
+	local activeCell = tes3.getPlayerCell()
+	local cellName = activeCell.editorName
 
-			local fogPosition = tes3vector3.new(
-			8192 * activeCell.gridX + 4096,
-			8192 * activeCell.gridY + 4096,
+	if not this.isCellFogged(cellName, fogType) and not activeCell.isInterior then
+		this.debugLog("Cell is not fogged. Adding " .. fogType .. ".")
+
+		local fogPosition = tes3vector3.new(
+			CELL_SIZE * activeCell.gridX + CELL_SIZE/2,
+			CELL_SIZE * activeCell.gridY + CELL_SIZE/2,
 			getFogPosition(activeCell, height)
 		)
 
-		if tes3.player.position:copy():distance(fogPosition:copy()) <= data.fogDistance then
-			local fogMesh = this.meshes[type]:clone()
-			fogMesh:clearTransforms()
-			fogMesh.translation = fogPosition
+		local fogMesh = this.meshes[fogType]:clone()
+		fogMesh:clearTransforms()
+		fogMesh.translation = fogPosition
 
-			vfxRoot:attachChild(fogMesh, true)
+		vfxRoot:attachChild(fogMesh, true)
 
-			for _, vfx in pairs(vfxRoot.children) do
-				if vfx and vfx.name == "tew_" .. type then
-					local particleSystem = vfx:getObjectByName("MistEffect")
-					local controller = particleSystem.controller
-					controller.initialSize = table.choice(data.fogTypes[type].initialSize)
-					this.updateCurrentFogs(type, vfx, activeCell)
-				end
+		for _, vfx in pairs(vfxRoot.children) do
+			if vfx and vfx.name == "tew_" .. fogType then
+				deployEmitter(vfx, vfx:getObjectByName("FogLayer1"), cellName, fogType)
+				deployEmitter(vfx, vfx:getObjectByName("FogLayer2"), cellName, fogType)
+				deployEmitter(vfx, vfx:getObjectByName("FogLayer3"), cellName, fogType)
 			end
-
-			fogMesh:update()
-			fogMesh:updateProperties()
-			fogMesh:updateNodeEffects()
 		end
+
+		fogMesh:update()
+		fogMesh:updateProperties()
+		fogMesh:updateNodeEffects()
 	end
-end
 end
 
 
@@ -329,37 +353,37 @@ function this.addInteriorFog(options)
 		pos.z + height
 	)
 
-		local originalInteriorFogColor = cell.fogColor
-		local interiorFogColor = {
-			r = math.clamp(math.lerp(originalInteriorFogColor.r, 1.0, 0.5), 0.3, 0.85),
-			g = math.clamp(math.lerp(originalInteriorFogColor.r, 1.0, 0.46), 0.3, 0.85),
-			b = math.clamp(math.lerp(originalInteriorFogColor.r, 1.0, 0.42), 0.3, 0.85)
-		}
+	local originalInteriorFogColor = cell.fogColor
+	local interiorFogColor = {
+		r = math.clamp(math.lerp(originalInteriorFogColor.r, 1.0, 0.5), 0.3, 0.85),
+		g = math.clamp(math.lerp(originalInteriorFogColor.r, 1.0, 0.46), 0.3, 0.85),
+		b = math.clamp(math.lerp(originalInteriorFogColor.r, 1.0, 0.42), 0.3, 0.85)
+	}
 
-		local particleSystem = fogMesh:getObjectByName("MistEffect")
-		local controller = particleSystem.controller
-		controller.initialSize = table.choice(data.interiorFog.initialSize)
-		local colorModifier = controller.particleModifiers
-		for _, key in pairs(colorModifier.colorData.keys) do
-			key.color.r = interiorFogColor.r
-			key.color.g = interiorFogColor.g
-			key.color.b = interiorFogColor.b
-		end
-		local materialProperty = particleSystem.materialProperty
-		materialProperty.emissive = interiorFogColor
-		materialProperty.specular = interiorFogColor
-		materialProperty.diffuse = interiorFogColor
-		materialProperty.ambient = interiorFogColor
-
-		particleSystem:updateNodeEffects()
-		this.updateCurrentFogs(fogType, fogMesh, cell)
-
-		vfxRoot:attachChild(fogMesh, true)
-
-		fogMesh:update()
-		fogMesh:updateProperties()
-		fogMesh:updateNodeEffects()
+	local particleSystem = fogMesh:getObjectByName("MistEffect")
+	local controller = particleSystem.controller
+	controller.initialSize = table.choice(data.interiorFog.initialSize)
+	local colorModifier = controller.particleModifiers
+	for _, key in pairs(colorModifier.colorData.keys) do
+		key.color.r = interiorFogColor.r
+		key.color.g = interiorFogColor.g
+		key.color.b = interiorFogColor.b
 	end
+	local materialProperty = particleSystem.materialProperty
+	materialProperty.emissive = interiorFogColor
+	materialProperty.specular = interiorFogColor
+	materialProperty.diffuse = interiorFogColor
+	materialProperty.ambient = interiorFogColor
+
+	particleSystem:updateNodeEffects()
+	this.updateCurrentFogs(fogType, fogMesh, cell.editorName)
+
+	vfxRoot:attachChild(fogMesh, true)
+
+	fogMesh:update()
+	fogMesh:updateProperties()
+	fogMesh:updateNodeEffects()
+end
 end
 
 
