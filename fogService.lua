@@ -6,7 +6,6 @@ local VERSION = version.version
 local data = require("tew.Vapourmist.data")
 
 local CELL_SIZE = 8192
-local DRAW_DISTANCE = mge.distantLandRenderConfig.drawDistance
 
 local WtC = tes3.worldController.weatherController
 
@@ -175,11 +174,11 @@ local function getInteriorCellPosition(cell)
 end
 
 local function getFogMix(fog, sky)
-	return math.lerp(fog, sky, 0.15)
+	return math.lerp(fog, sky, 0.17)
 end
 
 local function getLerpedComp(comp)
-	return math.clamp(math.lerp(comp, 1.0, 0.06), 0.03, 0.88)
+	return math.clamp(math.lerp(comp, 1.0, 0.03), 0.03, 0.88)
 end
 
 -- Calculate output colours from current fog colour --
@@ -229,9 +228,6 @@ function this.reColour()
 						if fogType == currentFogs["cloud"] then
 							controller.speed = speed
 							controller.planarAngle = angle
-							controller.emitterWidth = CELL_SIZE * DRAW_DISTANCE
-							controller.emitterHeight = CELL_SIZE * DRAW_DISTANCE
-							controller.emitterDepth = math.random(700, 2400)
 						end
 
 						for _, key in pairs(colorModifier.colorData.keys) do
@@ -263,9 +259,16 @@ end
 
 local function deployEmitter(vfx, particleSystem, cellName, fogType)
 	if not particleSystem then return end
+	local drawDistance = mge.distantLandRenderConfig.drawDistance
 	local controller = particleSystem.controller
-	controller.birthRate = math.random(0.3, 1.5) * DRAW_DISTANCE
+	local birthRate = (math.random(0.5, 1.5) * drawDistance) - CELL_SIZE
+	controller.birthRate = birthRate
 	controller.useBirthRate = true
+	local lifespan = controller.lifespan * birthRate * 0.6
+	controller.lifespan = lifespan * controller.birthRate
+	controller.emitterWidth = CELL_SIZE * drawDistance
+	controller.emitterHeight = CELL_SIZE * drawDistance
+	controller.emitterDepth = math.random(700, 2400)
 	local sizeArray = data.fogTypes[fogType].initialSize
 	controller.initialSize = sizeArray[math.random(1, #sizeArray)]
 	this.updateCurrentFogs(fogType, vfx, cellName)
