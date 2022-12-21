@@ -260,17 +260,25 @@ end
 local function deployEmitter(vfx, particleSystem, cellName, fogType)
 	if not particleSystem then return end
 	local drawDistance = mge.distantLandRenderConfig.drawDistance
+	local effectSize = CELL_SIZE * (drawDistance - 1)
+
 	local controller = particleSystem.controller
-	local birthRate = (math.random(0.5, 1.5) * drawDistance) - CELL_SIZE
+	local birthRate = math.random(0.6, 1.7) * drawDistance
 	controller.birthRate = birthRate
 	controller.useBirthRate = true
-	local lifespan = controller.lifespan * birthRate * 0.6
-	controller.lifespan = lifespan * controller.birthRate
-	controller.emitterWidth = CELL_SIZE * drawDistance
-	controller.emitterHeight = CELL_SIZE * drawDistance
+
+	local lifespan = controller.lifespan
+	controller.lifespan = math.random(9, 18)
+
+	debug.log(tostring(lifespan))
+
+	controller.emitterWidth = effectSize
+	controller.emitterHeight = effectSize
 	controller.emitterDepth = math.random(700, 2400)
+
 	local sizeArray = data.fogTypes[fogType].initialSize
 	controller.initialSize = sizeArray[math.random(1, #sizeArray)]
+
 	this.updateCurrentFogs(fogType, vfx, cellName)
 end
 
