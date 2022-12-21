@@ -270,8 +270,6 @@ local function deployEmitter(vfx, particleSystem, cellName, fogType)
 	local lifespan = controller.lifespan
 	controller.lifespan = math.random(9, 18)
 
-	debug.log(tostring(lifespan))
-
 	controller.emitterWidth = effectSize
 	controller.emitterHeight = effectSize
 	controller.emitterDepth = math.random(700, 2400)
