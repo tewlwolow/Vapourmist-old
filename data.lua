@@ -2,10 +2,9 @@ local data = {}
 
 local config = require("tew.Vapourmist.config")
 
-data.baseTimerDuration = 0.3
+data.baseTimerDuration = 0.1
 data.minimumSpeed = 15
 data.minStaticCount = 5
-data.fogDistance = 8200
 
 local interiorStatics = {
     "in_moldcave",

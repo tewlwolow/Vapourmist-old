@@ -110,7 +110,7 @@ local function conditionCheck()
 			}
 		else
 			-- If transition scalar is high enough or we're not transitioning at all --
-			fogService.addFog(options)
+			fogService.addFog(options) -- Maybe cleanInactiveFog again? To make sure we catch any edge teleporting cases etc.
 		end
 
 		::continue::
