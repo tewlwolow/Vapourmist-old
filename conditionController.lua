@@ -5,7 +5,7 @@
 local fogService = require("tew.Vapourmist.fogService")
 local debugLog = fogService.debugLog
 local config = require("tew.Vapourmist.config")
-local data = require("tew.Vapourmist.data")
+local data = require("tew.Vapourmist.components.data")
 
 local toFogColour, toWeather, toRegion, fromFogColour, fromWeather, fromRegion, recolourRegistered
 
