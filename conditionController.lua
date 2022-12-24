@@ -1,5 +1,4 @@
 -- Condition controller
-
 -->>>---------------------------------------------------------------------------------------------<<<--
 
 local fogService = require("tew.Vapourmist.fogService")

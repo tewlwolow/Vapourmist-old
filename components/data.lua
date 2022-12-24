@@ -62,8 +62,7 @@ data.fogTypes = {
         ) and not data.fogTypes["mist"].wetWeathers[weather.name]
         or config.mistyWeathers[weather.name]
     end
-
-},
+}
 }
 
 data.interiorFog = {
@@ -92,7 +91,6 @@ data.interiorFog = {
 
         return false
     end
-
 }
 
 

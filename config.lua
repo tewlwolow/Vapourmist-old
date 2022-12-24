@@ -3,7 +3,9 @@ return mwse.loadConfig (
     {
         speedCoefficient = 45,
         debugLogOn = false,
-        interiorFog = true,
+        clouds = true,
+        -- mist = true,
+        interior = true,
         cloudyWeathers = {
             ["Cloudy"] = true,
             ["Foggy"] = true,

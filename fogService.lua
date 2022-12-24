@@ -3,7 +3,7 @@ local this = {}
 local config = require("tew.Vapourmist.config")
 local version = require("tew.Vapourmist.version")
 local VERSION = version.version
-local data = require("tew.Vapourmist.components.data")
+local data = require("tew.Vapourmist.data")
 
 local CELL_SIZE = 8192
 local MIN_LIFESPAN = 18
