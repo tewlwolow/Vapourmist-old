@@ -1,4 +1,4 @@
--- Interior fog module
+-- Clouds module
 -->>>---------------------------------------------------------------------------------------------<<<--
 
 -- Imports
@@ -32,7 +32,7 @@ local NAME_PARTICLE_SYSTEMS = {
 local toRemove = {}
 local currentClouds = {}
 
-local fromRegion, toRegion, fromWeather, toWeather
+local fromRegion, toRegion, fromWeather, toWeather, recolourRegistered
 
 -->>>---------------------------------------------------------------------------------------------<<<--
 -- Functions
@@ -70,22 +70,95 @@ local function detachAll()
 	currentClouds = {}
 end
 
-function clouds.onTimerTick()
-	-- To a different function to reuse
+local function appcullAll()
+	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
+	for _, node in pairs(vfxRoot.children) do
+		if node and node.name == NAME_MAIN then
+			local emitter = node:getObjectByName(NAME_EMITTER)
+			if emitter.appCulled ~= true then
+				emitter.appCulled = true
+				emitter:update()
+				node:update()
+				timer.start{
+					type = timer.simulate,
+					duration = MAX_LIFESPAN,
+					iterations = 1,
+					persistent = false,
+					callback = function() updateToRemove(node) end
+				}
+			end
+		end
+	end
+end
+
+local function waitingCheck()
 	local mp = tes3.mobilePlayer
 	if (not mp) or (mp and (mp.waiting or mp.traveling)) then
 		toWeather = WtC.nextWeather or WtC.currentWeather
-		-- Remove clouds after waiting/travelling if conditions changed --
 		if not (isAvailable(toWeather)) then
 			debugLog("Player waiting or travelling and clouds not available.")
 			detachAll()
 		end
-		return
 	end
 end
 
+function clouds.onWaitMenu(e)
+	local element = e.element
+	element:registerAfter(tes3.uiEvent.destroy, function()
+		waitingCheck()
+	end)
+end
+
+
 function clouds.onWeatherChanged()
-	-- TODO: remove all but with appcull if not available here
+	toWeather = WtC.nextWeather or WtC.currentWeather
+	fromWeather = fromWeather or WtC.currentWeather
+
+	if not isAvailable(toWeather) then
+		appcullAll()
+	end
+
+	--[[
+		if WtC.nextWeather and WtC.transitionScalar < 0.6 then
+			debugLog("Weather transition in progress. Adding fog in a bit.")
+			timer.start {
+				type = timer.game,
+				iterations = 1,
+				duration = 0.2,
+				callback = function() fogService.addFog(options) end
+			}
+		else
+			-- If transition scalar is high enough or we're not transitioning at all --
+			fogService.addFog(options) -- Maybe cleanInactiveFog again? To make sure we catch any edge teleporting cases etc.
+		end
+	]]
+end
+
+local function onTimerTick()
+
+end
+
+local function startTimer()
+	timer.start{
+		duration = TIMER_DURATION,
+		callback = onTimerTick,
+		iterations = -1,
+		type = timer.game,
+		persist = false
+	}
+end
+
+-- Register events, timers and reset values --
+local function onLoaded()
+	-- To ensure we don't end up reregistering the event --
+	if not recolourRegistered then
+		event.register(tes3.event.enterFrame, reColour)
+		recolourRegistered = true
+	end
+	startTimer()
+	fromWeather = nil
+	fromRegion = nil
+	detachAll()
 end
 
 return clouds
