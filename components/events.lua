@@ -8,6 +8,8 @@ local services = {
 		init = function()
 			local clouds = require("tew.Vapourmist.services.clouds")
 			event.register("VAPOURMIST:enteredInterior", clouds.detachAll)
+			event.register(tes3.event.loaded, clouds.onLoaded)
+			event.register(tes3.event.cellChanged, clouds.conditionCheck)
 			event.register(tes3.event.weatherChangedImmediate, clouds.onWeatherChanged)
 			event.register(tes3.event.weatherTransitionStarted, clouds.onWeatherChanged)
 			event.register(tes3.event.weatherTransitionFinished, clouds.onWeatherChanged)
