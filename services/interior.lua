@@ -89,7 +89,7 @@ local function updateTracker(fogMesh, cell)
 	tracker[fogMesh] = cell
 end
 
-local function removeFog(cell)
+local function removeFromTracker(cell)
 	local pos = table.find(tracker, cell)
 	if pos then
 		table.remove(tracker, pos)
@@ -194,7 +194,7 @@ function interior.onCellChanged(e)
 
 	local previousCell = e.previousCell
 	if previousCell and not (previousCell.isOrBehavesAsExterior) then
-		removeFog(previousCell)
+		removeFromTracker(previousCell)
 	end
 end
 
