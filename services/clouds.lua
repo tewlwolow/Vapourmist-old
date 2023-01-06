@@ -18,7 +18,7 @@ local MIN_LIFESPAN = 12
 local MAX_LIFESPAN = 25
 
 local MIN_DEPTH = 500
-local MAX_DEPTH = 2300
+local MAX_DEPTH = 3400
 
 local MIN_BIRTHRATE = 1.8
 local MAX_BIRTHRATE = 3.0
