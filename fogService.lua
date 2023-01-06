@@ -6,6 +6,10 @@ local VERSION = version.version
 local data = require("tew.Vapourmist.data")
 
 local CELL_SIZE = 8192
+local MIN_LIFESPAN = 18
+local MAX_LIFESPAN = 30
+local BIRTHRATE_MIN = 1.8
+local BIRTHRATE_MAX = 3.0
 
 local WtC = tes3.worldController.weatherController
 
@@ -21,6 +25,8 @@ this.meshes = {
 	["mist"] = nil,
 	["interior"] = nil
 }
+
+local fadingEmitters = {}
 
 -- Print debug messages --
 function this.debugLog(message)
@@ -41,27 +47,60 @@ function this.purgeCurrentFogs(fogType)
 end
 
 -- Update cache --
-function this.updateCurrentFogs(fogType, fog, cellName)
-	currentFogs[fogType][fog] = cellName
+function this.updateCurrentFogs(fogType, fog)
+	if not table.find(currentFogs[fogType], fog) then
+		table.insert(currentFogs[fogType], #currentFogs[fogType] + 1, fog)
+	end
+end
+
+function this.removeFromCurrentFogs(fogType, fog)
+	if not (currentFogs[fogType]) then
+		return
+	end
+	local pos = table.find(currentFogs[fogType], fog)
+	if pos then
+		table.remove(currentFogs[fogType], pos)
+	end
+end
+
+local function getCutoffDistance(drawDistance)
+	return CELL_SIZE * drawDistance / 10
 end
 
 -- Returns true if the cell is fogged --
-function this.isCellFogged(cellName, fogType)
-	if table.empty(currentFogs) or table.empty(currentFogs[fogType]) then return false end
-	return table.find(currentFogs[fogType], cellName)
+function this.isCellFogged(fogType)
+	if not (currentFogs[fogType]) then return false end
+	if #currentFogs[fogType] == 2 then return true end
+	return false
+end
+
+local function removeFading(emitter)
+	local pos = table.find(fadingEmitters, emitter)
+	if pos then
+		table.remove(fadingEmitters, pos)
+		debug.log("Fading fog removed.")
+	end
 end
 
 -- Appculling switch --
-function this.cullFog(bool, fogType)
+function this.cullFog(fogType)
 	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
 	for _, node in pairs(vfxRoot.children) do
 		if node and node.name == "tew_" .. fogType then
 			local emitter = node:getObjectByName("Mist Emitter")
-			if emitter.appCulled ~= bool then
-				emitter.appCulled = bool
+			if emitter.appCulled ~= true then
+				emitter.appCulled = true
 				emitter:update()
 				node:update()
-				this.debugLog("Appculling switched to " .. tostring(bool) .. " for " .. fogType .. " fog.")
+				table.insert(fadingEmitters, #fadingEmitters + 1, emitter)
+				timer.start{
+					type = timer.simulate,
+					duration = MAX_LIFESPAN + 2,
+					iterations = 1,
+					persistent = false,
+					callback = function() removeFading(emitter) end
+				}
+				this.debugLog("Appculling switched to " .. tostring(true) .. " for " .. fogType .. " fogs.")
 			end
 		end
 	end
@@ -74,6 +113,14 @@ local function removeSelected(fog)
 		emitter.appCulled = true
 		emitter:update()
 		fog:update()
+		table.insert(fadingEmitters, #fadingEmitters + 1, emitter)
+		timer.start{
+			type = timer.simulate,
+			duration = MAX_LIFESPAN,
+			iterations = 1,
+			persistent = false,
+			callback = function() removeFading(emitter) end
+		}
 		this.debugLog("Appculling fog: " .. fog.name)
 	end
 end
@@ -82,40 +129,34 @@ end
 function this.cleanInactiveFog()
 	local mp = tes3.mobilePlayer
 	if not mp or not mp.position then return end
+	local cell = tes3.getPlayerCell()
+
+	local toRemove = {}
+
+	local drawDistance = mge.distantLandRenderConfig.drawDistance
 
 	local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
 
-	for _, node in pairs(vfxRoot.children) do
-		if node and string.startswith(node.name, "tew_") then
-			local emitter = node:getObjectByName("Mist Emitter")
-			if emitter and emitter.appCulled then
-				vfxRoot:detachChild(node)
-				this.debugLog("Found appculled fog. Detaching.")
+	debug.log(tostring(getCutoffDistance(drawDistance)))
 
-				for _, fogList in pairs(currentFogs) do
-					for fog, _ in pairs(fogList) do
-						if node == fog then
-							fogList[fog] = nil
-							this.debugLog("Removed fog: " .. node.name)
-						end
-					end
-				end
-			end
-		end
-	end
 
 	for _, fogType in pairs(currentFogs) do
-		for fog, _ in pairs(fogType) do
-			if fog and fog.appCulled then
+		for _, fog in ipairs(fogType) do
+			debug.log(tostring(mp.position:distance(fog.translation)))
+			local emitter = fog:getObjectByName("Mist Emitter")
+			if emitter and emitter.appCulled and not (table.find(fadingEmitters, emitter)) then
 				vfxRoot:detachChild(fog)
 				this.debugLog("Found appculled fog. Detaching.")
-				fogType[fog] = nil
-				this.debugLog("Removed fog: " .. fog.name)
-			elseif fog and mp.position:distance(fog.translation) > data.fogDistance then
+				toRemove[fog] = fogType
+			elseif (mp.position:distance(fog.translation) > (getCutoffDistance(drawDistance))) then
 				this.debugLog("Found distant fog. Appculling.")
 				removeSelected(fog)
 			end
 		end
+	end
+
+	for fog, fogType in pairs(toRemove) do
+		this.removeFromCurrentFogs(fogType, fog)
 	end
 
 end
@@ -174,7 +215,7 @@ local function getInteriorCellPosition(cell)
 end
 
 local function getFogMix(fog, sky)
-	return math.lerp(fog, sky, 0.17)
+	return math.lerp(fog, sky, 0.45)
 end
 
 local function getLerpedComp(comp)
@@ -211,7 +252,7 @@ function this.reColour()
 	for _, fogType in pairs(currentFogs) do
 		if not fogType then return end
 		if fogType ~= currentFogs["interior"] then
-			for fog, _ in pairs(fogType) do
+			for _, fog in ipairs(fogType) do
 				if fog and fogType ~= "interior" then
 					local emitters = {
 						fog:getObjectByName("FogLayer1"),
@@ -257,18 +298,19 @@ function this.reColour()
 	end
 end
 
-local function deployEmitter(vfx, particleSystem, cellName, fogType)
+local function deployEmitter(particleSystem, fogType)
 	if not particleSystem then return end
 	local drawDistance = mge.distantLandRenderConfig.drawDistance
 	local effectSize = CELL_SIZE * (drawDistance - 1)
 
 	local controller = particleSystem.controller
-	local birthRate = math.random(0.6, 1.7) * drawDistance
+	local birthRate = math.random(BIRTHRATE_MIN, BIRTHRATE_MAX) * drawDistance
 	controller.birthRate = birthRate
 	controller.useBirthRate = true
 
-	local lifespan = controller.lifespan
-	controller.lifespan = math.random(9, 18)
+	local lifespan = math.random(MIN_LIFESPAN, MAX_LIFESPAN)
+	controller.lifespan = lifespan
+	controller.emitStopTime = lifespan
 
 	controller.emitterWidth = effectSize
 	controller.emitterHeight = effectSize
@@ -276,11 +318,9 @@ local function deployEmitter(vfx, particleSystem, cellName, fogType)
 
 	local sizeArray = data.fogTypes[fogType].initialSize
 	controller.initialSize = sizeArray[math.random(1, #sizeArray)]
-
-	this.updateCurrentFogs(fogType, vfx, cellName)
 end
 
--- Add fogs to the active cells
+
 function this.addFog(options)
 	local fogType = options.type
 	local height = options.height
@@ -290,14 +330,18 @@ function this.addFog(options)
 	this.debugLog("Checking if we can add fog: " .. fogType)
 
 	local activeCell = tes3.getPlayerCell()
-	local cellName = activeCell.editorName
 
-	if not this.isCellFogged(cellName, fogType) and not activeCell.isInterior then
+	if not this.isCellFogged(fogType) and not activeCell.isInterior then
 		this.debugLog("Cell is not fogged. Adding " .. fogType .. ".")
 
+		local mp = tes3.mobilePlayer
+		if not mp or not mp.position then return end
+
 		local fogPosition = tes3vector3.new(
-			CELL_SIZE * activeCell.gridX + CELL_SIZE/2,
-			CELL_SIZE * activeCell.gridY + CELL_SIZE/2,
+			-- CELL_SIZE * activeCell.gridX + CELL_SIZE/2,
+			-- CELL_SIZE * activeCell.gridY + CELL_SIZE/2,
+			mp.position.x,
+			mp.position.y,
 			getFogPosition(activeCell, height)
 		)
 
@@ -307,13 +351,12 @@ function this.addFog(options)
 
 		vfxRoot:attachChild(fogMesh, true)
 
-		for _, vfx in pairs(vfxRoot.children) do
-			if vfx and vfx.name == "tew_" .. fogType then
-				deployEmitter(vfx, vfx:getObjectByName("FogLayer1"), cellName, fogType)
-				deployEmitter(vfx, vfx:getObjectByName("FogLayer2"), cellName, fogType)
-				deployEmitter(vfx, vfx:getObjectByName("FogLayer3"), cellName, fogType)
-			end
-		end
+		local fogVFX = vfxRoot:getObjectByName("tew_" .. fogType)
+		this.updateCurrentFogs(fogType, fogVFX)
+
+		deployEmitter(fogVFX:getObjectByName("FogLayer1"), fogType)
+		deployEmitter(fogVFX:getObjectByName("FogLayer2"), fogType)
+		deployEmitter(fogVFX:getObjectByName("FogLayer3"), fogType)
 
 		fogMesh:update()
 		fogMesh:updateProperties()
@@ -325,7 +368,7 @@ end
 -- Removes fog from view by appculling - with fade out
 function this.removeFog(fogType)
 	this.debugLog("Removing fog of type: " .. fogType)
-	this.cullFog(true, fogType)
+	this.cullFog(fogType)
 end
 
 -- Removes fog from view by detaching - without fade out
@@ -350,7 +393,7 @@ function this.addInteriorFog(options)
 	local height = options.height
 	local cell = options.cell
 
-	if not this.isCellFogged(cell, fogType) then
+	if not this.isCellFogged(fogType) then
 		this.debugLog("Interior cell is not fogged. Adding " .. fogType .. ".")
 		local fogMesh = this.meshes["interior"]:clone()
 		local pos = getInteriorCellPosition(cell)
@@ -385,7 +428,7 @@ function this.addInteriorFog(options)
 	materialProperty.ambient = interiorFogColor
 
 	particleSystem:updateNodeEffects()
-	this.updateCurrentFogs(fogType, fogMesh, cell.editorName)
+	this.updateCurrentFogs(fogType, fogMesh)
 
 	vfxRoot:attachChild(fogMesh, true)
 
@@ -430,3 +473,12 @@ function this.removeAllExterior()
 end
 
 return this
+
+--[[
+TODO:
+
+	use queing
+	array to hold fogs to remove instead of searching for appculled shit
+	fix interior
+
+]]
