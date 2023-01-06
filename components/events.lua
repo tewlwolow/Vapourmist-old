@@ -13,6 +13,7 @@ local services = {
 			event.register(tes3.event.weatherChangedImmediate, clouds.onWeatherChanged)
 			event.register(tes3.event.weatherTransitionStarted, clouds.onWeatherChanged)
 			event.register(tes3.event.weatherTransitionFinished, clouds.onWeatherChanged)
+			event.register(tes3.event.uiActivated, clouds.onWaitMenu, { filter = "MenuTimePass"})
 		end
 	},
 	mist = {
