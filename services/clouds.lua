@@ -25,7 +25,7 @@ local MAX_BIRTHRATE = 3.0
 
 local MIN_SPEED = 15
 
-local CUTOFF_COEFF = 1.5
+local CUTOFF_COEFF = 4
 
 local HEIGHTS = {5760, 5900, 6000, 6100, 6200, 6800}
 local SIZES = {1340, 1500, 1620, 1740, 1917, 2100, 2450, 2500, 2600}
@@ -87,12 +87,7 @@ local function getParticleSystemSize(drawDistance)
 end
 
 local function getCutoffDistance(drawDistance)
-	local distantFog = mge.weather.getDistantFog(WtC.currentWeather.index)
-	local fogDistance = 1
-	if distantFog then
-		fogDistance = distantFog.distance
-	end
-	return (CELL_SIZE * drawDistance * fogDistance) / CUTOFF_COEFF
+	return getParticleSystemSize(drawDistance) / CUTOFF_COEFF
 end
 
 local function isPlayerClouded(cloudMesh)
@@ -100,6 +95,7 @@ local function isPlayerClouded(cloudMesh)
 	local mp = tes3.mobilePlayer
 	local playerPos = mp.position:copy()
 	local drawDistance = mge.distantLandRenderConfig.drawDistance
+	debug.log(tostring(playerPos:distance(cloudMesh.translation:copy()) .. " " .. (getCutoffDistance(drawDistance))))
 	return playerPos:distance(cloudMesh.translation:copy()) < (getCutoffDistance(drawDistance))
 end
 
@@ -155,7 +151,6 @@ local function switchAppCull(node, bool)
 	if (emitter ~= bool) then
 		emitter.appCulled = bool
 		emitter:update()
-		-- node:update()
 	end
 end
 
@@ -331,7 +326,7 @@ local function addClouds()
 		end
 	end
 
-	cloudMesh.appCulled = false
+	showCloud(cloudMesh)
 	cloudMesh:update()
 	cloudMesh:updateProperties()
 	cloudMesh:updateEffects()
