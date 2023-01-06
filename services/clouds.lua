@@ -154,10 +154,6 @@ local function switchAppCull(node, bool)
 	end
 end
 
-local function showCloud(node)
-	switchAppCull(node, false)
-end
-
 local function appCull(node)
 	local emitter = node:getObjectByName(NAME_EMITTER)
 	if not (emitter.appCulled) then
@@ -326,7 +322,7 @@ local function addClouds()
 		end
 	end
 
-	showCloud(cloudMesh)
+	cloudMesh.appCulled = false
 	cloudMesh:update()
 	cloudMesh:updateProperties()
 	cloudMesh:updateEffects()
