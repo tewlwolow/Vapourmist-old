@@ -2,7 +2,8 @@ local shader = require("tew.Vapourmist.components.shader")
 
 local MIN_DISTANCE = 8192 * 1.5
 local MAX_DISTANCE = 8192 * 3
-local MAX_DEPTH = 8192 / 12
+local MAX_DEPTH = 8192 / 10
+local DENSITY = 10
 local WtC = tes3.worldController.weatherController
 
 local fogId = "tew_mist"
@@ -17,15 +18,15 @@ local fogParams = {
     color = tes3vector3.new(),
     center = tes3vector3.new(),
     radius = tes3vector3.new(MAX_DISTANCE, MAX_DISTANCE, MAX_DEPTH),
-    density = 15,
+    density = DENSITY,
 }
 
 local function getCloudColourMix(fogComp, skyComp)
-	return math.lerp(fogComp, skyComp, 0.1)
+	return math.lerp(fogComp, skyComp, 0.2)
 end
 
 local function getDarkerColour(comp)
-	return math.clamp(math.lerp(comp, 0.0, 0.1), 0.03, 0.88)
+	return math.clamp(math.lerp(comp, 0.0, 0.15), 0.03, 0.88)
 end
 
 -- Calculate output colours from current fog colour --
@@ -49,13 +50,11 @@ local function updateDensity(dist)
     local f = math.clamp(dist, MIN_DISTANCE, MAX_DISTANCE)
     f = math.remap(f, MIN_DISTANCE, MAX_DISTANCE, 15.0, 0.0)
 
-    local cell = tes3.getPlayerCell()
-    local x = cell.gridX
-    local y = cell.gridY
+    local playerPos = tes3.mobilePlayer.position:copy()
 
     local mistCenter = tes3vector3.new(
-        (x + 0.5) * 8192,
-        (y + 0.5) * 8192,
+        (playerPos.x),
+        (playerPos.y),
         0
     )
 
@@ -66,25 +65,24 @@ local function updateDensity(dist)
     shader.createOrUpdateFog(fogId, fogParams)
 end
 
-local function update(e)
+local function update()
     if tes3.player.cell.isInterior then
         return
     end
 
 	local currDist = 0
-    local prevDist = e.timer.data.prevDist or currDist
 
-    if math.min(currDist, prevDist) <= MAX_DISTANCE then
+    if currDist <= MAX_DISTANCE then
         updateDensity(currDist)
     end
 
-    e.timer.data.prevDist = currDist
 end
 event.register(tes3.event.loaded, function()
     FOG_TIMER = timer.start({
         iterations = -1,
-        duration = 1 / 10,
+        duration = 0.01,
         callback = update,
+        type = timer.game,
         data = {},
     })
 end)
@@ -96,6 +94,7 @@ function mist.onCellChanged(e)
         shader.deleteFog(fogId)
         FOG_TIMER:pause()
     else
+        update()
         shader.createOrUpdateFog(fogId, fogParams)
         FOG_TIMER:resume()
     end
