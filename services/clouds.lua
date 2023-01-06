@@ -219,16 +219,8 @@ local function getOutputValues()
 	}
 end
 
-local function reColour()
-	-- TODO: take removal queue into acct as well
-	if not tracker then return end
-	if table.empty(tracker) then return end
-	local output = getOutputValues()
-	local cloudColour = output.colours
-	local speed = output.speed
-	local angle = output.angle
-
-	for _, cloud in ipairs(tracker) do
+local function reColourTable(tab, cloudColour, speed, angle)
+	for _, cloud in ipairs(tab) do
 		for _, name in ipairs(NAME_PARTICLE_SYSTEMS) do
 			local particleSystem = cloud:getObjectByName(name)
 
@@ -258,6 +250,18 @@ local function reColour()
 			cloud:updateEffects()
 		end
 	end
+end
+
+local function reColour()
+	if not tracker then return end
+	if table.empty(tracker) then return end
+	local output = getOutputValues()
+	local cloudColour = output.colours
+	local speed = output.speed
+	local angle = output.angle
+
+	reColourTable(tracker, cloudColour, speed, angle)
+	reColourTable(removeQueue, cloudColour, speed, angle)
 end
 
 local function deployEmitter(particleSystem)
