@@ -10,18 +10,27 @@ local config = require("tew.Vapourmist.config")
 -->>>---------------------------------------------------------------------------------------------<<<--
 -- Constants
 
-local CELL_SIZE = 8192
-local MIN_LIFESPAN = 18
-local MAX_LIFESPAN = 30
-local BIRTHRATE_MIN = 1.8
-local BIRTHRATE_MAX = 3.0
-local MIN_SPEED = 15
 local TIMER_DURATION = 0.1
-local MESH = tes3.loadMesh("tew\\Vapourmist\\vapourcloud.nif")
-local HEIGHT = 6000
-local SIZES = {1340, 1500, 1620, 1740, 1917, 2100, 2450, 2500, 2600}
-local WtC = tes3.worldController.weatherController
 
+local CELL_SIZE = 8192
+
+local MIN_LIFESPAN = 12
+local MAX_LIFESPAN = 25
+
+local MIN_DEPTH = 500
+local MAX_DEPTH = 2300
+
+local MIN_BIRTHRATE = 1.8
+local MAX_BIRTHRATE = 3.0
+
+local MIN_SPEED = 15
+
+local CUTOFF_COEFF = 1.5
+
+local HEIGHTS = {5760, 5900, 6000, 6100, 6200, 6800}
+local SIZES = {1340, 1500, 1620, 1740, 1917, 2100, 2450, 2500, 2600}
+
+local MESH = tes3.loadMesh("tew\\Vapourmist\\vapourcloud.nif")
 local NAME_MAIN = "tew_Clouds"
 local NAME_EMITTER = "tew_Clouds_Emitter"
 local NAME_PARTICLE_SYSTEMS = {
@@ -37,6 +46,8 @@ local tracker, removeQueue = {}, {}
 
 local toWeather, recolourRegistered
 
+local WtC = tes3.worldController.weatherController
+
 -->>>---------------------------------------------------------------------------------------------<<<--
 -- Functions
 
@@ -44,23 +55,20 @@ local toWeather, recolourRegistered
 local function getCloudPosition(cell)
 	local average = 0
 	local denom = 0
+
 	for stat in cell:iterateReferences() do
 		average = average + stat.position.z
 		denom = denom + 1
 	end
 
+	math.randomseed(os.time())
+	local height = HEIGHTS[math.random(#HEIGHTS)]
+
 	if average == 0 or denom == 0 then
-		return HEIGHT
+		return height
+	else
+		return (average / denom) + height
 	end
-
-	local result = (average / denom) + HEIGHT
-	if result <= 0 then
-		return HEIGHT
-	elseif result > HEIGHT then
-		return HEIGHT + 100
-	end
-
-	return result
 end
 
 local function isAvailable(weather)
@@ -69,15 +77,30 @@ local function isAvailable(weather)
 	and config.cloudyWeathers[weatherName]
 end
 
+local function getParticleSystemSize(drawDistance)
+	local distantFog = mge.weather.getDistantFog(WtC.currentWeather.index)
+	local fogDistance = 1
+	if distantFog then
+		fogDistance = distantFog.distance
+	end
+	return (CELL_SIZE * drawDistance * fogDistance)
+end
+
 local function getCutoffDistance(drawDistance)
-	return CELL_SIZE * drawDistance / 4
+	local distantFog = mge.weather.getDistantFog(WtC.currentWeather.index)
+	local fogDistance = 1
+	if distantFog then
+		fogDistance = distantFog.distance
+	end
+	return (CELL_SIZE * drawDistance * fogDistance) / CUTOFF_COEFF
 end
 
 local function isPlayerClouded(cloudMesh)
 	debugLog("Checking if player is clouded.")
 	local mp = tes3.mobilePlayer
+	local playerPos = mp.position:copy()
 	local drawDistance = mge.distantLandRenderConfig.drawDistance
-	return mp.position:distance(cloudMesh.translation) < (getCutoffDistance(drawDistance))
+	return playerPos:distance(cloudMesh.translation:copy()) < (getCutoffDistance(drawDistance))
 end
 
 local function addToTracker(cloud)
@@ -127,21 +150,23 @@ function clouds.detachAll()
 	tracker = {}
 end
 
-local function showCloud(node)
+local function switchAppCull(node, bool)
 	local emitter = node:getObjectByName(NAME_EMITTER)
-	if (emitter.appCulled) then
-		emitter.appCulled = false
+	if (emitter ~= bool) then
+		emitter.appCulled = bool
 		emitter:update()
-		node:update()
+		-- node:update()
 	end
+end
+
+local function showCloud(node)
+	switchAppCull(node, false)
 end
 
 local function appCull(node)
 	local emitter = node:getObjectByName(NAME_EMITTER)
 	if not (emitter.appCulled) then
-		emitter.appCulled = true
-		emitter:update()
-		node:update()
+		switchAppCull(node, true)
 		timer.start{
 			type = timer.simulate,
 			duration = MAX_LIFESPAN,
@@ -240,7 +265,7 @@ local function deployEmitter(particleSystem)
 
 	local controller = particleSystem.controller
 
-	local birthRate = math.random(BIRTHRATE_MIN, BIRTHRATE_MAX) * drawDistance
+	local birthRate = math.random(MIN_BIRTHRATE, MAX_BIRTHRATE) * drawDistance
 	controller.birthRate = birthRate
 	controller.useBirthRate = true
 
@@ -248,11 +273,11 @@ local function deployEmitter(particleSystem)
 	controller.lifespan = lifespan
 	controller.emitStopTime = lifespan
 
-	local effectSize = CELL_SIZE * (drawDistance - 1)
+	local effectSize = getParticleSystemSize(drawDistance)
 
 	controller.emitterWidth = effectSize
 	controller.emitterHeight = effectSize
-	controller.emitterDepth = math.random(700, 2400)
+	controller.emitterDepth = math.random(MIN_DEPTH, MAX_DEPTH)
 
 	controller.initialSize = SIZES[math.random(#SIZES)]
 	debugLog("Emitter deployed.")
@@ -266,9 +291,11 @@ local function addClouds()
 	local mp = tes3.mobilePlayer
 	if not mp or not mp.position then return end
 
+	local playerPos = mp.position:copy()
+
 	local cloudPosition = tes3vector3.new(
-		mp.position.x,
-		mp.position.y,
+		playerPos.x,
+		playerPos.y,
 		getCloudPosition(cell)
 	)
 
@@ -276,9 +303,20 @@ local function addClouds()
 	cloudMesh:clearTransforms()
 	cloudMesh.translation = cloudPosition
 
-	vfxRoot:attachChild(cloudMesh, true)
+	vfxRoot:attachChild(cloudMesh)
 
-	local cloudNode = vfxRoot:getObjectByName(NAME_MAIN)
+	local cloudNode
+	for _, node in pairs(vfxRoot.children) do
+		if node then
+			if node.name == NAME_MAIN then
+				if not table.find(removeQueue, node) then
+					cloudNode = node
+				end
+			end
+		end
+	end
+	if not cloudNode then return end
+
 	addToTracker(cloudNode)
 
 	for _, name in ipairs(NAME_PARTICLE_SYSTEMS) do
@@ -288,10 +326,10 @@ local function addClouds()
 		end
 	end
 
+	cloudMesh.appCulled = false
 	cloudMesh:update()
 	cloudMesh:updateProperties()
 	cloudMesh:updateEffects()
-	showCloud(cloudNode)
 	debugLog("Clouds added.")
 end
 
@@ -343,6 +381,7 @@ function clouds.conditionCheck()
 	if not cell.isOrBehavesAsExterior then return end
 
 	toWeather = WtC.nextWeather or WtC.currentWeather
+
 	for _, node in ipairs(removeQueue) do
 		local vfxRoot = tes3.game.worldSceneGraphRoot.children[9]
 		detach(vfxRoot, node)
