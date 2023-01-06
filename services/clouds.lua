@@ -220,6 +220,7 @@ local function getOutputValues()
 end
 
 local function reColour()
+	-- TODO: take removal queue into acct as well
 	if not tracker then return end
 	if table.empty(tracker) then return end
 	local output = getOutputValues()
@@ -376,6 +377,7 @@ function clouds.onWeatherChanged()
 	end
 end
 
+-- TODO: make sure to cover COC
 function clouds.conditionCheck()
 	local cell = tes3.getPlayerCell()
 	if not cell.isOrBehavesAsExterior then return end
