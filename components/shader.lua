@@ -3,33 +3,29 @@ local this = {}
 ---@type mgeShaderHandle|nil
 local shader
 
-local NUM_FOG_VOLUMES = 4
+local NUM_FOG_VOLUMES = 3
 
 local fogVolumes = {
     fogCenters = {
         0, 0, 0,
         0, 0, 0,
-        0, 0, 0,
-        0, 0, 0,
+        0, 0, 0
     },
     fogRadi = {
         0, 0, 0,
         0, 0, 0,
-        0, 0, 0,
-        0, 0, 0,
+        0, 0, 0
     },
     fogColors = {
         0, 0, 0,
         0, 0, 0,
-        0, 0, 0,
-        0, 0, 0,
+        0, 0, 0
     },
     fogDensities = {
         0,
         0,
-        0,
-        0,
-    },
+        0
+    }
 }
 
 --- Associates each active fog volume to a specific available index.
