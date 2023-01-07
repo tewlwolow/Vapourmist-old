@@ -267,7 +267,7 @@ local function deployEmitter(particleSystem)
 
 	local lifespan = math.random(MIN_LIFESPAN, MAX_LIFESPAN)
 	controller.lifespan = lifespan
-	controller.emitStopTime = lifespan
+	controller.emitStopTime = lifespan * lifespan
 
 	local effectSize = getParticleSystemSize(drawDistance)
 
@@ -276,6 +276,10 @@ local function deployEmitter(particleSystem)
 	controller.emitterDepth = math.random(MIN_DEPTH, MAX_DEPTH)
 
 	controller.initialSize = SIZES[math.random(#SIZES)]
+
+	particleSystem:update()
+	particleSystem:updateProperties()
+	particleSystem:updateEffects()
 	debugLog("Emitter deployed.")
 end
 
