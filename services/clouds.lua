@@ -42,7 +42,7 @@ local NAME_PARTICLE_SYSTEMS = {
 -->>>---------------------------------------------------------------------------------------------<<<--
 -- Structures
 
-local tracker, removeQueue = {}, {}
+local tracker, removeQueue, appCulledTracker = {}, {}, {}
 
 local toWeather, recolourRegistered
 
@@ -51,6 +51,8 @@ local WtC = tes3.worldController.weatherController
 -->>>---------------------------------------------------------------------------------------------<<<--
 -- Functions
 
+
+-- Helper logic
 
 local function getCloudPosition(cell)
 	local average = 0
@@ -99,19 +101,26 @@ local function isPlayerClouded(cloudMesh)
 	return playerPos:distance(cloudMesh.translation:copy()) < (getCutoffDistance(drawDistance))
 end
 
+
+-- Table logic
+
+local function removeFromTable(tab, val)
+	local pos = table.find(tab, val)
+	if pos then
+		table.remove(tab, pos)
+	else
+		tab = {}
+	end
+end
+
 local function addToTracker(cloud)
 	table.insert(tracker, cloud)
 	debugLog("Clouds added to tracker.")
 end
 
 local function removeFromTracker(cloud)
-	local pos = table.find(tracker, cloud)
-	if pos then
-		table.remove(tracker, pos)
-		debugLog("Clouds removed from tracker.")
-	else
-		tracker = {}
-	end
+	removeFromTable(tracker, cloud)
+	debugLog("Clouds removed from tracker.")
 end
 
 local function addToRemoveQueue(cloud)
@@ -120,16 +129,24 @@ local function addToRemoveQueue(cloud)
 end
 
 local function removeFromRemoveQueue(cloud)
-	local pos = table.find(removeQueue, cloud)
-	if pos then
-		table.remove(removeQueue, pos)
-		debugLog("Clouds removed from removal queue.")
-	else
-		removeQueue = {}
-	end
+	removeFromTable(removeQueue, cloud)
+	debugLog("Clouds removed from removal queue.")
 end
 
+local function addToAppCulledTracker(cloud)
+	table.insert(appCulledTracker, cloud)
+	debugLog("Clouds added to appCulled tracker.")
+end
+
+local function removeFromAppCulledTracker(cloud)
+	removeFromTable(appCulledTracker, cloud)
+	debugLog("Clouds removed from appCulled tracker.")
+end
+
+-- Hide/show logic
+
 local function detach(vfxRoot, node)
+	removeFromAppCulledTracker(node)
 	vfxRoot:detachChild(node)
 	debugLog("Cloud detached.")
 	removeFromRemoveQueue(node)
@@ -166,6 +183,7 @@ local function appCull(node)
 			callback = function() addToRemoveQueue(node) end
 		}
 		debugLog("Clouds appculled.")
+		addToAppCulledTracker(node)
 		removeFromTracker(node)
 	else
 		debugLog("Clouds already appculled. Skipping.")
@@ -181,6 +199,8 @@ local function appCullAll()
 		end
 	end
 end
+
+-- Colour logic
 
 local function getCloudColourMix(fogComp, skyComp)
 	return math.lerp(fogComp, skyComp, 0.2)
@@ -252,8 +272,10 @@ local function reColour()
 	local angle = output.angle
 
 	reColourTable(tracker, cloudColour, speed, angle)
-	reColourTable(removeQueue, cloudColour, speed, angle)
+	reColourTable(appCulledTracker, cloudColour, speed, angle)
 end
+
+-- NIF values logic
 
 local function deployEmitter(particleSystem)
 	math.randomseed(os.time())
@@ -333,6 +355,8 @@ local function addClouds()
 	debugLog("Clouds added.")
 end
 
+-- Conditions logic
+
 local function waitingCheck()
 	debugLog("Starting waiting check.")
 	local mp = tes3.mobilePlayer
@@ -376,7 +400,6 @@ function clouds.onWeatherChanged()
 	end
 end
 
--- TODO: make sure to cover COC
 function clouds.conditionCheck()
 	local cell = tes3.getPlayerCell()
 	if not cell.isOrBehavesAsExterior then return end
@@ -403,6 +426,8 @@ function clouds.conditionCheck()
 		end
 	end
 end
+
+-- Time and event logic
 
 local function startTimer()
 	timer.start{
